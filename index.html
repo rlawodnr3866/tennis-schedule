@@ -41,7 +41,7 @@ input[type=time] { width: 175px; }
 .slot-block { margin-bottom: 1.25rem; }
 .slot-header { font-size: 13px; font-weight: 600; color: #fff; background: #374151; border-radius: 8px 8px 0 0; padding: 8px 14px; }
 .courts-row { display: grid; gap: 1px; background: #e5e5e5; border-radius: 0 0 8px 8px; overflow: hidden; }
-.court-cell { background: #fff; padding: 12px 14px; display: flex; align-items: center; gap: 10px; }
+.court-cell { background: #fff; padding: 12px 14px; display: flex; align-items: center; gap: 10px; overflow: hidden; }
 .court-label { font-size: 12px; font-weight: 600; color: #6b7280; min-width: 52px; }
 .badge { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 11px; font-weight: 600; min-width: 36px; text-align: center; }
 .badge-mx { background: #dbeafe; color: #1e40af; }
@@ -49,7 +49,9 @@ input[type=time] { width: 175px; }
 .badge-ff { background: #fce7f3; color: #9d174d; }
 .vs-row { display: flex; align-items: center; gap: 8px; flex: 1; }
 .team { display: flex; align-items: center; gap: 4px; }
-.team-name { font-size: 13px; color: #1a1a1a; }
+.team-name { font-size: 13px; color: #1a1a1a; white-space: nowrap; }
+.vs-row { flex-wrap: nowrap; }
+.team { flex-shrink: 0; }
 .partner-sep { font-size: 12px; color: #aaa; }
 .vs-sep { font-size: 12px; font-weight: 600; color: #d1d5db; padding: 0 4px; }
 .summary-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
