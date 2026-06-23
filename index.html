@@ -19,9 +19,10 @@ input[type=text], input[type=number], input[type=time] {
 }
 input[type=text]:focus, input[type=number]:focus, input[type=time]:focus { border-color: #999; }
 input[type=number] { width: 72px; }
-input[type=time] { width: 175px; }
+input[type=time] { width: 140px; }
 .players-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-.gender-section h4 { font-size: 13px; font-weight: 600; color: #666; margin-bottom: 0.6rem; padding-bottom: 6px; border-bottom: 1px solid #eee; }
+.gender-section h4 { font-size: 13px; font-weight: 600; color: #666; margin-bottom: 0.6rem; padding-bottom: 6px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 6px; }
+.count-badge { font-size: 11px; font-weight: 600; background: #f3f4f6; color: #6b7280; border-radius: 99px; padding: 1px 7px; }
 .player-row { display: flex; gap: 8px; align-items: center; margin-bottom: 7px; }
 .player-row input[type=text] { flex: 1; }
 .remove-btn { background: none; border: none; cursor: pointer; color: #bbb; font-size: 20px; line-height: 1; padding: 0 2px; flex-shrink: 0; }
@@ -102,16 +103,28 @@ let males   = ['김슬기','김인호','김재욱','박명원','염형규','유�
 let females = ['김다영','김란','박수현','수언','유민정','지연'].map(n=>({name:n,gender:'F'}));
 
 function renderPlayers(){
+  const mCount=males.filter(p=>p.name.trim()).length;
+  const fCount=females.filter(p=>p.name.trim()).length;
+  document.querySelector('#male-list').previousElementSibling.innerHTML=`남성 <span class="count-badge">${mCount}명</span>`;
+  document.querySelector('#female-list').previousElementSibling.innerHTML=`여성 <span class="count-badge">${fCount}명</span>`;
   document.getElementById('male-list').innerHTML=males.map((p,i)=>`
     <div class="player-row">
-      <input type="text" value="${p.name}" placeholder="이름" oninput="males[${i}].name=this.value">
+      <input type="text" value="${p.name}" placeholder="이름" oninput="males[${i}].name=this.value; updateCounts()">
       <button class="remove-btn" onclick="removePlayer('M',${i})">×</button>
     </div>`).join('');
   document.getElementById('female-list').innerHTML=females.map((p,i)=>`
     <div class="player-row">
-      <input type="text" value="${p.name}" placeholder="이름" oninput="females[${i}].name=this.value">
+      <input type="text" value="${p.name}" placeholder="이름" oninput="females[${i}].name=this.value; updateCounts()">
       <button class="remove-btn" onclick="removePlayer('F',${i})">×</button>
     </div>`).join('');
+}
+function updateCounts(){
+  const mCount=males.filter(p=>p.name.trim()).length;
+  const fCount=females.filter(p=>p.name.trim()).length;
+  const mh=document.querySelector('#male-list').previousElementSibling;
+  const fh=document.querySelector('#female-list').previousElementSibling;
+  if(mh) mh.innerHTML=`남성 <span class="count-badge">${mCount}명</span>`;
+  if(fh) fh.innerHTML=`여성 <span class="count-badge">${fCount}명</span>`;
 }
 function addPlayer(g){ if(g==='M') males.push({name:'',gender:'M'}); else females.push({name:'',gender:'F'}); renderPlayers(); }
 function removePlayer(g,i){ if(g==='M') males.splice(i,1); else females.splice(i,1); renderPlayers(); }
