@@ -38,25 +38,20 @@ input[type=time] { width: 115px; }
 .stat-label { font-size: 12px; color: #888; margin-bottom: 4px; }
 .stat-val { font-size: 22px; font-weight: 600; color: #1a1a1a; }
 .warn { font-size: 13px; color: #c0392b; margin-bottom: 1rem; background: #fff5f5; border: 1px solid #fecaca; border-radius: 8px; padding: 10px 14px; }
-
-/* 시간대별 블록 */
 .slot-block { margin-bottom: 1.25rem; }
-.slot-header { font-size: 13px; font-weight: 600; color: #fff; background: #374151; border-radius: 8px 8px 0 0; padding: 8px 14px; letter-spacing: 0.02em; }
+.slot-header { font-size: 13px; font-weight: 600; color: #fff; background: #374151; border-radius: 8px 8px 0 0; padding: 8px 14px; }
 .courts-row { display: grid; gap: 1px; background: #e5e5e5; border-radius: 0 0 8px 8px; overflow: hidden; }
 .court-cell { background: #fff; padding: 12px 14px; display: flex; align-items: center; gap: 10px; }
-.court-cell:last-child { border-radius: 0 0 8px 8px; }
 .court-label { font-size: 12px; font-weight: 600; color: #6b7280; min-width: 52px; }
 .badge { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 11px; font-weight: 600; min-width: 36px; text-align: center; }
 .badge-mx { background: #dbeafe; color: #1e40af; }
 .badge-mm { background: #dcfce7; color: #166534; }
 .badge-ff { background: #fce7f3; color: #9d174d; }
-.vs-row { display: flex; align-items: center; gap: 8px; flex: 1; font-size: 14px; }
+.vs-row { display: flex; align-items: center; gap: 8px; flex: 1; }
 .team { display: flex; align-items: center; gap: 4px; }
 .team-name { font-size: 13px; color: #1a1a1a; }
 .partner-sep { font-size: 12px; color: #aaa; }
 .vs-sep { font-size: 12px; font-weight: 600; color: #d1d5db; padding: 0 4px; }
-
-/* 통계 테이블 */
 .summary-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
 .summary-table th { font-size: 12px; font-weight: 600; color: #888; text-align: left; padding: 7px 10px; border-bottom: 1px solid #eee; background: #fafafa; }
 .summary-table td { padding: 9px 10px; border-bottom: 1px solid #f0f0f0; color: #1a1a1a; vertical-align: middle; }
@@ -102,7 +97,7 @@ input[type=time] { width: 115px; }
 
 <script>
 let males   = ['김슬기','김인호','김재욱','박명원','염형규','유진수','이은섭','편도원'].map(n=>({name:n,gender:'M'}));
-let females = ['김다영','김란','박수현','수언','유민정','정지연'].map(n=>({name:n,gender:'F'}));
+let females = ['김다영','김란','박수현','수언','유민정','지연'].map(n=>({name:n,gender:'F'}));
 
 function renderPlayers(){
   document.getElementById('male-list').innerHTML=males.map((p,i)=>`
@@ -123,6 +118,8 @@ function minToTime(m){ return `${String(Math.floor(m/60)).padStart(2,'0')}:${Str
 function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
 function pairKey(a,b){ return [a,b].sort().join('|'); }
 
+const MAX_SPEC = 5; // 남복/여복 최대 게임수
+
 function generate(){
   document.getElementById('error-msg').textContent='';
   document.getElementById('result').style.display='none';
@@ -142,128 +139,190 @@ function generate(){
   const totalSlots=Math.floor((endMin-startMin)/GAME_DUR);
   if(totalSlots<1){ document.getElementById('error-msg').textContent='시간이 너무 짧아요.'; return; }
 
-  const gameCount={},mmCount={},ffCount={},mxCount={},consec={};
-  valid.forEach(p=>{ gameCount[p.name]=0;mmCount[p.name]=0;ffCount[p.name]=0;mxCount[p.name]=0;consec[p.name]=0; });
-  const pairCount={};
-  function getPair(a,b){ return pairCount[pairKey(a,b)]||0; }
-  function incPair(a,b){ const k=pairKey(a,b); pairCount[k]=(pairCount[k]||0)+1; }
-  function groupDiv(g){ let s=0; for(let i=0;i<g.length;i++) for(let j=i+1;j<g.length;j++) s+=getPair(g[i].name,g[j].name); return s; }
+  const gameCount={}, mmCount={}, ffCount={}, mxCount={}, consec={};
+  valid.forEach(p=>{ gameCount[p.name]=0; mmCount[p.name]=0; ffCount[p.name]=0; mxCount[p.name]=0; consec[p.name]=0; });
+
+  // 파트너 횟수 추적 (같은 팀으로 뛴 횟수)
+  const partnerCount={};
+  function getPartner(a,b){ return partnerCount[pairKey(a,b)]||0; }
+  function incPartner(a,b){ const k=pairKey(a,b); partnerCount[k]=(partnerCount[k]||0)+1; }
+
   function sortByCount(arr){ return [...arr].sort((a,b)=>gameCount[a.name]-gameCount[b.name]); }
 
-  // 슬롯별 게임 목록: schedule[slot] = [{court, type, teamA, teamB}]
+  // 파트너 중복 없는 최적 4인 선택
+  function pickBest4(pool){
+    const sorted=sortByCount(pool).slice(0,Math.min(pool.length,8));
+    let best=null, bestPartnerDup=Infinity;
+    for(let i=0;i<sorted.length;i++) for(let j=i+1;j<sorted.length;j++)
+      for(let k=j+1;k<sorted.length;k++) for(let l=k+1;l<sorted.length;l++){
+        const g=[sorted[i],sorted[j],sorted[k],sorted[l]];
+        const gcMax=Math.max(...g.map(p=>gameCount[p.name]));
+        const gcMin=Math.min(...g.map(p=>gameCount[p.name]));
+        if(gcMax-gcMin>1) continue;
+        // 세 가지 팀 분할 중 파트너 중복 최소인 것
+        const splits=[
+          [[g[0],g[1]],[g[2],g[3]]],
+          [[g[0],g[2]],[g[1],g[3]]],
+          [[g[0],g[3]],[g[1],g[2]]],
+        ];
+        for(const [tA,tB] of splits){
+          const dup=getPartner(tA[0].name,tA[1].name)+getPartner(tB[0].name,tB[1].name);
+          if(dup<bestPartnerDup){ bestPartnerDup=dup; best={tA,tB}; }
+        }
+      }
+    if(!best){
+      const s=sortByCount(pool).slice(0,4);
+      best={tA:[s[0],s[1]],tB:[s[2],s[3]]};
+    }
+    return best;
+  }
+
+  // 혼복 최적 조합: 파트너 중복 최소
+  function pickBestMX(availM, availF){
+    const sm=sortByCount(availM).slice(0,Math.min(availM.length,5));
+    const sf=sortByCount(availF).slice(0,Math.min(availF.length,5));
+    let best=null, bestDup=Infinity;
+    for(const m1 of sm) for(const m2 of sm){ if(m1===m2) continue;
+      for(const f1 of sf) for(const f2 of sf){ if(f1===f2) continue;
+        const g=[m1,m2,f1,f2];
+        const gcMax=Math.max(...g.map(p=>gameCount[p.name]));
+        const gcMin=Math.min(...g.map(p=>gameCount[p.name]));
+        if(gcMax-gcMin>1) continue;
+        // 혼복 팀: (m1+f1) vs (m2+f2)
+        const dup=getPartner(m1.name,f1.name)+getPartner(m2.name,f2.name);
+        if(dup<bestDup){ bestDup=dup; best={tA:[m1,f1],tB:[m2,f2]}; }
+      }
+    }
+    if(!best){
+      const sm2=sortByCount(availM), sf2=sortByCount(availF);
+      best={tA:[sm2[0],sf2[0]],tB:[sm2[1],sf2[1]]};
+    }
+    return best;
+  }
+
+  function recordGame(tA,tB,type){
+    [...tA,...tB].forEach(p=>{
+      gameCount[p.name]++;
+      if(type==='MM') mmCount[p.name]++;
+      else if(type==='FF') ffCount[p.name]++;
+      else mxCount[p.name]++;
+    });
+    incPartner(tA[0].name,tA[1].name);
+    incPartner(tB[0].name,tB[1].name);
+  }
+
   const slotGames=[];
 
   for(let slot=0;slot<totalSlots;slot++){
     slotGames[slot]=[];
     const slotPlaying=new Set();
+
     for(let court=0;court<courts;court++){
       const availM=vm.filter(p=>!slotPlaying.has(p.name)&&consec[p.name]<3);
       const availF=vf.filter(p=>!slotPlaying.has(p.name)&&consec[p.name]<3);
       const availAll=valid.filter(p=>!slotPlaying.has(p.name)&&consec[p.name]<3);
       if(availAll.length<4) break;
-      const canMM=availM.length>=4, canFF=availF.length>=4, canMX=availM.length>=2&&availF.length>=2;
+
+      // 남복/여복 MAX_SPEC 제한: 해당 종목 5게임 이미 찬 사람이 4명 미만이면 그 종목 불가
+      const mmAvail=availM.filter(p=>mmCount[p.name]<MAX_SPEC);
+      const ffAvail=availF.filter(p=>ffCount[p.name]<MAX_SPEC);
+      // 혼복은 mm+mx < MAX_SPEC*1.5 정도면 허용 (별도 제한 없음, 자연스럽게 배분)
+
+      const canMM=mmAvail.length>=4;
+      const canFF=ffAvail.length>=4;
+      const canMX=availM.length>=2&&availF.length>=2;
       if(!canMM&&!canFF&&!canMX) break;
 
-      const minMMval=vm.length>0?Math.min(...vm.map(p=>mmCount[p.name])):99;
-      const minFFval=vf.length>0?Math.min(...vf.map(p=>ffCount[p.name])):99;
-      const needMM=minMMval<2&&canMM, needFF=minFFval<2&&canFF;
+      // 우선순위: 남복/여복 최소 2게임 보장 → 남복/여복 우선 (MAX_SPEC 미만) → 혼복
+      const minMM=vm.length>0?Math.min(...vm.map(p=>mmCount[p.name])):99;
+      const minFF=vf.length>0?Math.min(...vf.map(p=>ffCount[p.name])):99;
+      const needMM=minMM<2&&canMM;
+      const needFF=minFF<2&&canFF;
 
       let gameType;
       if(needMM&&needFF) gameType=shuffle(['MM','FF'])[0];
       else if(needMM) gameType='MM';
       else if(needFF) gameType='FF';
       else {
-        const opts=[]; if(canMM) opts.push('MM','MM'); if(canFF) opts.push('FF','FF'); if(canMX) opts.push('MX');
+        // 남복/여복 우선 (MAX_SPEC 미만인 사람이 충분하면), 가득 찼으면 혼복
+        const opts=[];
+        if(canMM) opts.push('MM','MM');
+        if(canFF) opts.push('FF','FF');
+        if(canMX) opts.push('MX');
         gameType=shuffle(opts)[0]||(canMX?'MX':canMM?'MM':'FF');
       }
 
-      let teamA=[],teamB=[];
+      // 종목별로 실제 사용 가능한 풀 결정
+      let teamA, teamB;
       if(gameType==='MM'){
-        const cands=sortByCount(availM).slice(0,6);
-        let best=null,bs=Infinity;
-        for(let i=0;i<cands.length;i++) for(let j=i+1;j<cands.length;j++) for(let k=j+1;k<cands.length;k++) for(let l=k+1;l<cands.length;l++){
-          const g=[cands[i],cands[j],cands[k],cands[l]];
-          if(Math.max(...g.map(p=>gameCount[p.name]))-Math.min(...g.map(p=>gameCount[p.name]))>1) continue;
-          const sc=groupDiv(g); if(sc<bs){bs=sc;best=g;}
-        }
-        if(!best) best=sortByCount(availM).slice(0,4);
-        const sh=shuffle(best); teamA=[sh[0],sh[1]]; teamB=[sh[2],sh[3]];
+        const pool=mmAvail.length>=4?mmAvail:availM;
+        const {tA,tB}=pickBest4(pool); teamA=tA; teamB=tB;
       } else if(gameType==='FF'){
-        const cands=sortByCount(availF).slice(0,6);
-        let best=null,bs=Infinity;
-        for(let i=0;i<cands.length;i++) for(let j=i+1;j<cands.length;j++) for(let k=j+1;k<cands.length;k++) for(let l=k+1;l<cands.length;l++){
-          const g=[cands[i],cands[j],cands[k],cands[l]];
-          if(Math.max(...g.map(p=>gameCount[p.name]))-Math.min(...g.map(p=>gameCount[p.name]))>1) continue;
-          const sc=groupDiv(g); if(sc<bs){bs=sc;best=g;}
-        }
-        if(!best) best=sortByCount(availF).slice(0,4);
-        const sh=shuffle(best); teamA=[sh[0],sh[1]]; teamB=[sh[2],sh[3]];
+        const pool=ffAvail.length>=4?ffAvail:availF;
+        const {tA,tB}=pickBest4(pool); teamA=tA; teamB=tB;
       } else {
-        const sm=sortByCount(availM).slice(0,4), sf=sortByCount(availF).slice(0,4);
-        let best=null,bs=Infinity;
-        for(const m1 of sm) for(const m2 of sm){ if(m1===m2) continue;
-          for(const f1 of sf) for(const f2 of sf){ if(f1===f2) continue;
-            const g=[m1,m2,f1,f2];
-            if(Math.max(...g.map(p=>gameCount[p.name]))-Math.min(...g.map(p=>gameCount[p.name]))>1) continue;
-            const sc=getPair(m1.name,f1.name)+getPair(m2.name,f2.name)+getPair(m1.name,m2.name)+getPair(f1.name,f2.name);
-            if(sc<bs){bs=sc;best={m1,m2,f1,f2};}
-          }
-        }
-        if(!best) best={m1:sm[0],m2:sm[1],f1:sf[0],f2:sf[1]};
-        teamA=[best.m1,best.f1]; teamB=[best.m2,best.f2];
+        const {tA,tB}=pickBestMX(availM,availF); teamA=tA; teamB=tB;
       }
 
-      const picked=[...teamA,...teamB];
-      picked.forEach(p=>{ slotPlaying.add(p.name); gameCount[p.name]++; if(gameType==='MM') mmCount[p.name]++; else if(gameType==='FF') ffCount[p.name]++; else mxCount[p.name]++; });
-      for(let i=0;i<picked.length;i++) for(let j=i+1;j<picked.length;j++) incPair(picked[i].name,picked[j].name);
+      [...teamA,...teamB].forEach(p=>slotPlaying.add(p.name));
+      recordGame(teamA,teamB,gameType);
       slotGames[slot].push({court:court+1,type:gameType,teamA,teamB});
     }
     valid.forEach(p=>{ if(slotPlaying.has(p.name)) consec[p.name]++; else consec[p.name]=0; });
   }
 
-  // 편차 보정: 이미 만난 사람들로 페어 재조합해서 추가 슬롯에 넣기
+  // 편차 보정: 이미 만난 사람들로 페어 재조합
   function fixImbalance(){
     for(let pass=0;pass<30;pass++){
       const counts=valid.map(p=>gameCount[p.name]);
       if(Math.max(...counts)-Math.min(...counts)<2) break;
       const minC=Math.min(...counts);
-      const underList=valid.filter(p=>gameCount[p.name]===minC);
-      const under=underList[Math.floor(Math.random()*underList.length)];
-      const metPlayers=valid.filter(p=>p.name!==under.name&&getPair(under.name,p.name)>0);
-      if(metPlayers.length<3) break;
+      const under=shuffle(valid.filter(p=>gameCount[p.name]===minC))[0];
+      const metAll=valid.filter(p=>p.name!==under.name&&(getPartner(under.name,p.name)>0));
+      if(metAll.length<3) break;
       const underIsMale=under.gender==='M';
-      const sameGenderMet=metPlayers.filter(p=>p.gender===under.gender);
-      const diffGenderMet=metPlayers.filter(p=>p.gender!==under.gender);
+      const sameMet=metAll.filter(p=>p.gender===under.gender);
+      const diffMet=metAll.filter(p=>p.gender!==under.gender);
       let added=false;
 
-      if(sameGenderMet.length>=3){
-        const partners=shuffle(sameGenderMet).slice(0,3);
-        const sh=shuffle(partners);
-        const newTeamA=[under,sh[0]], newTeamB=[sh[1],sh[2]];
-        const newType=underIsMale?'MM':'FF';
-        // 보정 게임은 별도 슬롯에 추가
-        const extraSlotIdx=slotGames.length;
-        slotGames[extraSlotIdx]=[{court:1,type:newType,teamA:newTeamA,teamB:newTeamB}];
-        [under,...partners].forEach(p=>{ gameCount[p.name]++; if(newType==='MM') mmCount[p.name]++; else ffCount[p.name]++; });
-        for(let i=0;i<[under,...partners].length;i++) for(let j=i+1;j<[under,...partners].length;j++) incPair([under,...partners][i].name,[under,...partners][j].name);
-        added=true;
-      } else if(diffGenderMet.length>=2&&sameGenderMet.length>=1){
-        const partner=shuffle(sameGenderMet)[0], opp1=shuffle(diffGenderMet)[0], opp2=diffGenderMet.find(p=>p!==opp1)||diffGenderMet[0];
-        if(opp1===opp2){ break; }
-        const newTeamA=underIsMale?[under,opp1]:[opp1,under];
-        const newTeamB=underIsMale?[partner,opp2]:[opp2,partner];
-        const extraSlotIdx=slotGames.length;
-        slotGames[extraSlotIdx]=[{court:1,type:'MX',teamA:newTeamA,teamB:newTeamB}];
-        [under,partner,opp1,opp2].forEach(p=>{ gameCount[p.name]++; mxCount[p.name]++; });
-        for(let i=0;i<4;i++) for(let j=i+1;j<4;j++) incPair([under,partner,opp1,opp2][i].name,[under,partner,opp1,opp2][j].name);
-        added=true;
+      if(sameMet.length>=3){
+        // 남복/여복 MAX_SPEC 체크
+        const specCount=underIsMale?mmCount:ffCount;
+        if(specCount[under.name]<MAX_SPEC){
+          const partners=shuffle(sameMet).slice(0,3);
+          // 파트너 중복 최소 분할
+          const splits=[
+            [[under,partners[0]],[partners[1],partners[2]]],
+            [[under,partners[1]],[partners[0],partners[2]]],
+            [[under,partners[2]],[partners[0],partners[1]]],
+          ];
+          let best=splits[0], bestDup=Infinity;
+          for(const [tA,tB] of splits){
+            const dup=getPartner(tA[0].name,tA[1].name)+getPartner(tB[0].name,tB[1].name);
+            if(dup<bestDup){bestDup=dup;best=[tA,tB];}
+          }
+          const newType=underIsMale?'MM':'FF';
+          slotGames.push([{court:1,type:newType,teamA:best[0],teamB:best[1]}]);
+          recordGame(best[0],best[1],newType);
+          added=true;
+        }
+      }
+      if(!added&&diffMet.length>=2&&sameMet.length>=1){
+        const partner=shuffle(sameMet)[0];
+        const opps=shuffle(diffMet).slice(0,2);
+        if(opps.length>=2){
+          const tA=underIsMale?[under,opps[0]]:[opps[0],under];
+          const tB=underIsMale?[partner,opps[1]]:[opps[1],partner];
+          slotGames.push([{court:1,type:'MX',teamA:tA,teamB:tB}]);
+          recordGame(tA,tB,'MX');
+          added=true;
+        }
       }
       if(!added) break;
     }
   }
   fixImbalance();
 
-  // 렌더링: 슬롯별로 시간 계산 (보정 슬롯은 마지막 정규 슬롯 시간 이후)
   const counts=Object.values(gameCount);
   const minC=Math.min(...counts), maxC=Math.max(...counts);
 
@@ -300,7 +359,7 @@ function generate(){
     slotHTML+=`
       <div class="slot-block">
         <div class="slot-header">${timeLabel}</div>
-        <div class="courts-row" style="grid-template-columns:1fr;">${courtsHTML}</div>
+        <div class="courts-row">${courtsHTML}</div>
       </div>`;
   });
 
